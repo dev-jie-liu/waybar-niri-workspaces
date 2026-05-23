@@ -1,0 +1,35 @@
+button {
+  background-color: transparent;
+  border: none;
+  margin: 0;
+  padding: 2px;
+  transition: background-color 200ms ease;
+}
+
+button.focused {
+  background-color: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+}
+
+button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+workspace {
+  background-color: rgba(128, 160, 150, 0.7);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin: 0 3px;
+}
+
+workspace.active {
+  background-color: rgba(128, 160, 150, 0.95);
+}
+
+workspace-label {
+  color: rgba(30, 30, 30, 0.9);
+  font-weight: bold;
+  font-size: 13px;
+  margin-right: 4px;
+}
