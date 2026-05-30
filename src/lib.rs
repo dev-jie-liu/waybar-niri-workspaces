@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use futures::StreamExt;
 use settings::Settings;
@@ -13,7 +13,6 @@ mod compositor;
 mod errors;
 mod global;
 mod icons;
-mod screen;
 mod settings;
 mod widget;
 
@@ -76,8 +75,8 @@ struct WorkspaceBox {
 }
 
 struct ModuleInstance {
-    buttons: BTreeMap<u64, WindowButton>,
-    workspaces: BTreeMap<u64, WorkspaceBox>,
+    buttons: HashMap<u64, WindowButton>,
+    workspaces: HashMap<u64, WorkspaceBox>,
     container: gtk::Box,
     state: SharedState,
     previous_snapshot: Option<WorkspaceSnapshot>,
@@ -86,8 +85,8 @@ struct ModuleInstance {
 impl ModuleInstance {
     fn create(state: SharedState, container: gtk::Box) -> Self {
         Self {
-            buttons: BTreeMap::new(),
-            workspaces: BTreeMap::new(),
+            buttons: HashMap::new(),
+            workspaces: HashMap::new(),
             container,
             state,
             previous_snapshot: None,

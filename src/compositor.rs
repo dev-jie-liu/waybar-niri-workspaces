@@ -1,10 +1,12 @@
-#![allow(dead_code)]
-
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     ops::Deref,
     sync::Arc,
 };
+
+// Note: Many methods in CompositorClient are currently unused but are kept public
+// as they provide a comprehensive API for Niri window manipulation that may be
+// useful for future features or external callers.
 use niri_ipc::{Action, Event, Output, Reply, Request, Workspace, socket::Socket};
 
 use crate::{errors::ModuleError, settings::Settings};
@@ -14,6 +16,7 @@ pub struct CompositorClient {
     settings: Arc<Settings>,
 }
 
+#[allow(dead_code)]
 impl CompositorClient {
     pub fn create(settings: Arc<Settings>) -> Self {
         Self { settings }
@@ -236,10 +239,9 @@ impl CompositorClient {
 
         self.move_column_inner(window_id, target_index, keep_stacked)?;
 
-        if let Some(original_focus) = currently_focused {
-            if original_focus != window_id {
-                self.focus_window(original_focus)?;
-            }
+        if let Some(original_focus) = currently_focused
+            && original_focus != window_id {
+            self.focus_window(original_focus)?;
         }
         Ok(())
     }
@@ -277,9 +279,9 @@ impl CompositorClient {
 
         let mut ordered = filtered;
         if sum_target >= sum_current {
-            ordered.sort_by(|a, b| b.1.cmp(&a.1));
+            ordered.sort_by_key(|b| std::cmp::Reverse(b.1));
         } else {
-            ordered.sort_by(|a, b| a.1.cmp(&b.1));
+            ordered.sort_by_key(|a| a.1);
         }
 
         for (window_id, target_index) in ordered {
@@ -458,10 +460,10 @@ enum TrackerState {
     WindowsOnly(Vec<niri_ipc::Window>),
     WorkspacesOnly(Vec<Workspace>),
     Ready {
-        windows: BTreeMap<u64, niri_ipc::Window>,
-        workspaces: BTreeMap<u64, Workspace>,
-        active_per_workspace: BTreeMap<u64, u64>,
-        last_focused_per_workspace: BTreeMap<u64, u64>,
+        windows: HashMap<u64, niri_ipc::Window>,
+        workspaces: HashMap<u64, Workspace>,
+        active_per_workspace: HashMap<u64, u64>,
+        last_focused_per_workspace: HashMap<u64, u64>,
     },
 }
 
@@ -480,8 +482,8 @@ impl WindowTracker {
                     Some(WorkspacesOnly(ws)) => Some(Ready {
                         windows: windows.iter().map(|w| (w.id, w.clone())).collect(),
                         workspaces: ws.into_iter().map(|w| (w.id, w)).collect(),
-                        active_per_workspace: BTreeMap::new(),
-                        last_focused_per_workspace: BTreeMap::new(),
+                        active_per_workspace: HashMap::new(),
+                        last_focused_per_workspace: HashMap::new(),
                     }),
                     Some(Ready { workspaces, active_per_workspace, last_focused_per_workspace, .. }) => Some(Ready {
                         windows: windows.iter().map(|w| (w.id, w.clone())).collect(),
@@ -497,8 +499,8 @@ impl WindowTracker {
                     Some(WindowsOnly(wins)) => Some(Ready {
                         windows: wins.iter().map(|w| (w.id, w.clone())).collect(),
                         workspaces: workspaces.into_iter().map(|w| (w.id, w)).collect(),
-                        active_per_workspace: BTreeMap::new(),
-                        last_focused_per_workspace: BTreeMap::new(),
+                        active_per_workspace: HashMap::new(),
+                        last_focused_per_workspace: HashMap::new(),
                     }),
                     Some(Ready { windows, active_per_workspace, last_focused_per_workspace, .. }) => Some(Ready {
                         windows,
@@ -517,14 +519,11 @@ impl WindowTracker {
             Event::WindowOpenedOrChanged { window } => {
                 if let Some(Ready { windows, last_focused_per_workspace, .. }) = &mut self.state {
                     if window.is_focused {
-                        if let Some(old_focused) = windows.values().find(|w| w.is_focused).map(|w| w.id) {
-                            if let Some(old_window) = windows.get(&old_focused) {
-                                if old_window.layout.pos_in_scrolling_layout.is_some() {
-                                    if let Some(ws_id) = old_window.workspace_id {
-                                        last_focused_per_workspace.insert(ws_id, old_focused);
-                                    }
-                                }
-                            }
+                        if let Some(old_focused) = windows.values().find(|w| w.is_focused).map(|w| w.id)
+                            && let Some(old_window) = windows.get(&old_focused)
+                            && old_window.layout.pos_in_scrolling_layout.is_some()
+                            && let Some(ws_id) = old_window.workspace_id {
+                            last_focused_per_workspace.insert(ws_id, old_focused);
                         }
 
                         for w in windows.values_mut() {
@@ -536,14 +535,11 @@ impl WindowTracker {
             }
             Event::WindowFocusChanged { id } => {
                 if let Some(Ready { windows, last_focused_per_workspace, .. }) = &mut self.state {
-                    if let Some(old_focused) = windows.values().find(|w| w.is_focused).map(|w| w.id) {
-                        if let Some(window) = windows.get(&old_focused) {
-                            if window.layout.pos_in_scrolling_layout.is_some() {
-                                if let Some(ws_id) = window.workspace_id {
-                                    last_focused_per_workspace.insert(ws_id, old_focused);
-                                }
-                            }
-                        }
+                    if let Some(old_focused) = windows.values().find(|w| w.is_focused).map(|w| w.id)
+                        && let Some(window) = windows.get(&old_focused)
+                        && window.layout.pos_in_scrolling_layout.is_some()
+                        && let Some(ws_id) = window.workspace_id {
+                        last_focused_per_workspace.insert(ws_id, old_focused);
                     }
 
                     for window in windows.values_mut() {
@@ -606,10 +602,10 @@ impl WindowTracker {
 
     fn generate_snapshot(
         &self,
-        windows: &BTreeMap<u64, niri_ipc::Window>,
-        workspaces: &BTreeMap<u64, Workspace>,
-        active_per_workspace: &BTreeMap<u64, u64>,
-        last_focused_per_workspace: &BTreeMap<u64, u64>,
+        windows: &HashMap<u64, niri_ipc::Window>,
+        workspaces: &HashMap<u64, Workspace>,
+        active_per_workspace: &HashMap<u64, u64>,
+        last_focused_per_workspace: &HashMap<u64, u64>,
         _filter_workspace: bool,
     ) -> WorkspaceSnapshot {
         let active_workspace = workspaces.values().find(|ws| ws.is_active).map(|ws| ws.id);
@@ -662,9 +658,12 @@ impl WindowTracker {
     }
 }
 
+// Note: WindowSnapshot was kept for potential future use but is currently unused
+#[allow(dead_code)]
 pub type WindowSnapshot = Vec<WindowInfo>;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct WindowInfo {
     inner: niri_ipc::Window,
     output_name: Option<String>,
@@ -678,6 +677,7 @@ pub struct WorkspaceView {
 
 pub type WorkspaceSnapshot = Vec<WorkspaceView>;
 
+#[allow(dead_code)]
 impl WindowInfo {
     pub fn get_output(&self) -> Option<&str> {
         self.output_name.as_deref()
